@@ -108,6 +108,31 @@ def w2v_tokenize_text(text, language_default='russian'):
 			tokens.append(word)
 	return tokens
 
+def save_result(program_id, vacancy_id, similarity):
+
+    cnxn = mysql.connector.connect(user='root', password='',
+                              host='127.0.0.1',
+                              database='univer')
+
+    cursor = cnxn.cursor()
+
+    query = ("SELECT id FROM result "
+         "WHERE program_id = %s AND vacancy_id = %s")
+
+    cursor.execute(query, (int(program_id), int(vacancy_id)))
+
+    if cursor.fetchone() is None:
+        cursor_insert = cnxn.cursor()
+        add_result = ("INSERT INTO result "
+               "(program_id, vacancy_id, similarity) "
+               "VALUES (%s, %s, %s)")
+        cursor_insert.execute(add_result, (int(program_id), int(vacancy_id), float(similarity)))
+        cnxn.commit()
+        cursor_insert.close()
+    
+    cursor.close()
+    cnxn.close()
+
 
 ###################################################  SQL TO DATAFRAMES  ######################################################################
 
@@ -170,6 +195,8 @@ for specialization_id in (vacancies['specialization_id'].unique().tolist()):
 
             sentence_1_avg_vector = sentence_1_avg_vector.reshape(1, -1)
             sentence_2_avg_vector = sentence_2_avg_vector.reshape(1, -1)
+
+            save_result(teaching_programms.iloc[index_p]['id'], specialized_vacansies.iloc[index]['id'], cosine_similarity(sentence_1_avg_vector,sentence_2_avg_vector)[0][0])
 
             print('Programm id:',  teaching_programms.iloc[index_p]['id'], 'Vacancy id:', specialized_vacansies.iloc[index]['id'], 'Similarity:',cosine_similarity(sentence_1_avg_vector,sentence_2_avg_vector)[0][0])
 
