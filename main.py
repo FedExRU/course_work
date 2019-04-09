@@ -12,23 +12,39 @@ import mysql.connector
 import nltk
 from nltk.corpus import stopwords
 
-#Импорт gensim work2vec
+#Импорт gensim word2vec
 import gensim
 
-#Импорт numpy для dataframes
+#Импорт numpy для векторов
 import numpy as np
 
+#Импорт pandas для dataframes
 import pandas.io.sql as psql
 
 #Импорт библиотеки для работы с векторами
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.svm import SVR
 
 #Импорт коллекций
 from collections import defaultdict
 import collections
 from collections import Counter
 
+
+
+#Вычисление Манхэттенского расстояния
+def manhattan_distance(x, y):
+    return np.sum(np.absolute(x-y))
+
+#Вычисление косинусоидной сходимости
+def my_cosine_similarity(x, y):
+
+    multiplySum = np.sum(x*y)
+    xSum = math.sqrt(np.sum(x ** 2))
+    ySum = math.sqrt(np.sum(y ** 2))
+
+    return multiplySum/(xSum * ySum)
 
 #Вычисление среднего вектора
 def avg_feature_vector(words, model, num_features, index2word_set, if_idf = 1):
@@ -108,7 +124,7 @@ def w2v_tokenize_text(text, language_default='russian'):
 			tokens.append(word)
 	return tokens
 
-def save_result(program_id, vacancy_id, similarity):
+def save_result(program_id, vacancy_id, cosine_similarity, cosine_similarity_no_if_idf, manhattan_distance):
 
     cnxn = mysql.connector.connect(user='root', password='',
                               host='127.0.0.1',
@@ -124,9 +140,9 @@ def save_result(program_id, vacancy_id, similarity):
     if cursor.fetchone() is None:
         cursor_insert = cnxn.cursor()
         add_result = ("INSERT INTO result "
-               "(program_id, vacancy_id, similarity) "
-               "VALUES (%s, %s, %s)")
-        cursor_insert.execute(add_result, (int(program_id), int(vacancy_id), float(similarity)))
+               "(program_id, vacancy_id, cosine_similarity, cosine_similarity_no_if_idf, manhattan_distance) "
+               "VALUES (%s, %s, %s, %s, %s)")
+        cursor_insert.execute(add_result, (int(program_id), int(vacancy_id), float(cosine_similarity), float(cosine_similarity_no_if_idf), float(manhattan_distance)))
         cnxn.commit()
         cursor_insert.close()
     
@@ -185,19 +201,37 @@ for specialization_id in (vacancies['specialization_id'].unique().tolist()):
     
     for index, corpus in enumerate(vacancies_corpus):
 
-        sentence_1 = corpus
-        sentence_1_avg_vector = avg_feature_vector(sentence_1, model=word2vec_model, num_features=300, index2word_set=index2word_set_global, if_idf=if_idf_vacancies[index])
+        sentence_1                          = corpus
+        sentence_1_avg_vector               = avg_feature_vector(sentence_1, model=word2vec_model, num_features=300, index2word_set=index2word_set_global, if_idf=if_idf_vacancies[index])
+        sentence_1_avg_vector_no_if_idf     = avg_feature_vector(sentence_1, model=word2vec_model, num_features=300, index2word_set=index2word_set_global, if_idf=1)
+
 
         for index_p, corpus_p in enumerate(main_corpus):
 
-            sentence_2 = corpus_p
-            sentence_2_avg_vector = avg_feature_vector(sentence_2, model=word2vec_model, num_features=300, index2word_set=index2word_set_global, if_idf=if_idf_programms[index_p])
+            sentence_2                      = corpus_p
+            sentence_2_avg_vector           = avg_feature_vector(sentence_2, model=word2vec_model, num_features=300, index2word_set=index2word_set_global, if_idf=if_idf_programms[index_p])
+            sentence_2_avg_vector_no_if_idf = avg_feature_vector(sentence_2, model=word2vec_model, num_features=300, index2word_set=index2word_set_global, if_idf=1)
 
-            sentence_1_avg_vector = sentence_1_avg_vector.reshape(1, -1)
-            sentence_2_avg_vector = sentence_2_avg_vector.reshape(1, -1)
 
-            save_result(teaching_programms.iloc[index_p]['id'], specialized_vacansies.iloc[index]['id'], cosine_similarity(sentence_1_avg_vector,sentence_2_avg_vector)[0][0])
+            sentence_1_avg_vector           = sentence_1_avg_vector.reshape(1, -1)
+            sentence_2_avg_vector           = sentence_2_avg_vector.reshape(1, -1)
+            sentence_1_avg_vector_no_if_idf = sentence_1_avg_vector_no_if_idf.reshape(1, -1)
+            sentence_2_avg_vector_no_if_idf = sentence_2_avg_vector_no_if_idf.reshape(1, -1)
 
-            print('Programm id:',  teaching_programms.iloc[index_p]['id'], 'Vacancy id:', specialized_vacansies.iloc[index]['id'], 'Similarity:',cosine_similarity(sentence_1_avg_vector,sentence_2_avg_vector)[0][0])
+            save_result(teaching_programms.iloc[index_p]['id'], specialized_vacansies.iloc[index]['id'], cosine_similarity(sentence_1_avg_vector,sentence_2_avg_vector)[0][0], cosine_similarity(sentence_1_avg_vector_no_if_idf,sentence_2_avg_vector_no_if_idf)[0][0], manhattan_distance(sentence_1_avg_vector,sentence_2_avg_vector))
+            print('Programm id:',  teaching_programms.iloc[index_p]['id'], 'Vacancy id:', specialized_vacansies.iloc[index]['id'], 'Cosine Similarity NO IF IDF:',cosine_similarity(sentence_1_avg_vector_no_if_idf,sentence_2_avg_vector_no_if_idf)[0][0])
+            print('Programm id:',  teaching_programms.iloc[index_p]['id'], 'Vacancy id:', specialized_vacansies.iloc[index]['id'], 'Cosine Similarity IF IDF:',cosine_similarity(sentence_1_avg_vector,sentence_2_avg_vector)[0][0])
+            print('Programm id:',  teaching_programms.iloc[index_p]['id'], 'Vacancy id:', specialized_vacansies.iloc[index]['id'], 'Manhattan Distance:',manhattan_distance(sentence_1_avg_vector,sentence_2_avg_vector))
 
 ##############################################################################################################################################################################################################################################################################
+
+
+
+
+
+# SELECT DISTINCT vacancies.title as 'Vacancy', teaching_programms.name as 'Programm', `cosine_similarity_no_if_idf` as 'Cosine Similarity' , `cosine_similarity` as 'Cosine Similarity (IF IDF)', `manhattan_distance` as 'Manhattan Distance' 
+# FROM result
+# LEFT JOIN vacancies on vacancies.id = result.vacancy_id
+# LEFT JOIN teaching_programms on teaching_programms.id = result.program_id
+# WHERE result.cosine_similarity > 0.5
+# ORDER BY cosine_similarity DESC
