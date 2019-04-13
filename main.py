@@ -25,12 +25,12 @@ import pandas.io.sql as psql
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import SVR
+from sklearn.preprocessing import normalize
 
 #Импорт коллекций
 from collections import defaultdict
 import collections
 from collections import Counter
-
 
 
 #Вычисление Манхэттенского расстояния
@@ -162,7 +162,7 @@ cursor = cnxn.cursor()
 
 teaching_programms  = psql.read_sql("SELECT * FROM teaching_programms", cnxn)
 
-vacancies           = psql.read_sql("SELECT * FROM vacancies LIMIT 100", cnxn)
+vacancies           = psql.read_sql("SELECT * FROM vacancies LIMIT 200 OFFSET 500", cnxn)
 
 cnxn.close()
 
@@ -204,6 +204,7 @@ for specialization_id in (vacancies['specialization_id'].unique().tolist()):
         sentence_1                          = corpus
         sentence_1_avg_vector               = avg_feature_vector(sentence_1, model=word2vec_model, num_features=300, index2word_set=index2word_set_global, if_idf=if_idf_vacancies[index])
         sentence_1_avg_vector_no_if_idf     = avg_feature_vector(sentence_1, model=word2vec_model, num_features=300, index2word_set=index2word_set_global, if_idf=1)
+        sentence_1_avg_vector_normalize     = normalize(sentence_1_avg_vector[:,np.newaxis], axis=0).ravel()
 
 
         for index_p, corpus_p in enumerate(main_corpus):
@@ -211,6 +212,7 @@ for specialization_id in (vacancies['specialization_id'].unique().tolist()):
             sentence_2                      = corpus_p
             sentence_2_avg_vector           = avg_feature_vector(sentence_2, model=word2vec_model, num_features=300, index2word_set=index2word_set_global, if_idf=if_idf_programms[index_p])
             sentence_2_avg_vector_no_if_idf = avg_feature_vector(sentence_2, model=word2vec_model, num_features=300, index2word_set=index2word_set_global, if_idf=1)
+            sentence_2_avg_vector_normalize = normalize(sentence_2_avg_vector[:,np.newaxis], axis=0).ravel()
 
 
             sentence_1_avg_vector           = sentence_1_avg_vector.reshape(1, -1)
@@ -218,10 +220,10 @@ for specialization_id in (vacancies['specialization_id'].unique().tolist()):
             sentence_1_avg_vector_no_if_idf = sentence_1_avg_vector_no_if_idf.reshape(1, -1)
             sentence_2_avg_vector_no_if_idf = sentence_2_avg_vector_no_if_idf.reshape(1, -1)
 
-            save_result(teaching_programms.iloc[index_p]['id'], specialized_vacansies.iloc[index]['id'], cosine_similarity(sentence_1_avg_vector,sentence_2_avg_vector)[0][0], cosine_similarity(sentence_1_avg_vector_no_if_idf,sentence_2_avg_vector_no_if_idf)[0][0], manhattan_distance(sentence_1_avg_vector,sentence_2_avg_vector))
+            save_result(teaching_programms.iloc[index_p]['id'], specialized_vacansies.iloc[index]['id'], cosine_similarity(sentence_1_avg_vector,sentence_2_avg_vector)[0][0], cosine_similarity(sentence_1_avg_vector_no_if_idf,sentence_2_avg_vector_no_if_idf)[0][0], manhattan_distance(sentence_1_avg_vector_normalize,sentence_2_avg_vector_normalize))
             print('Programm id:',  teaching_programms.iloc[index_p]['id'], 'Vacancy id:', specialized_vacansies.iloc[index]['id'], 'Cosine Similarity NO IF IDF:',cosine_similarity(sentence_1_avg_vector_no_if_idf,sentence_2_avg_vector_no_if_idf)[0][0])
             print('Programm id:',  teaching_programms.iloc[index_p]['id'], 'Vacancy id:', specialized_vacansies.iloc[index]['id'], 'Cosine Similarity IF IDF:',cosine_similarity(sentence_1_avg_vector,sentence_2_avg_vector)[0][0])
-            print('Programm id:',  teaching_programms.iloc[index_p]['id'], 'Vacancy id:', specialized_vacansies.iloc[index]['id'], 'Manhattan Distance:',manhattan_distance(sentence_1_avg_vector,sentence_2_avg_vector))
+            print('Programm id:',  teaching_programms.iloc[index_p]['id'], 'Vacancy id:', specialized_vacansies.iloc[index]['id'], 'Manhattan Distance:',manhattan_distance(sentence_1_avg_vector_normalize,sentence_2_avg_vector_normalize))
 
 ##############################################################################################################################################################################################################################################################################
 
